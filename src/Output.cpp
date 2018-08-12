@@ -18,8 +18,13 @@
 #include "Configuration.h"
 #include "FstreamInclude.h"
 #include "Output.h"
+#include <algorithm>
+#include <iomanip>
 #include <iostream>
 #include <stack>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #ifndef _WIN32
 #define CURSES_CYCLIC_DEPENDENCY "[33m"
@@ -408,4 +413,113 @@ void UpdateIncludes(std::unordered_map<std::string, File>& files, std::unordered
     }
 }
 
+namespace metrics
+{
+    struct AnnotatedComponent {
+        Component * component;
+        Component::DependenciesStats stats;
+        double instability() const
+        {
+            const auto sum = stats.incoming + stats.outgoing;
+            return sum == 0 ? 0.0 /* independent component*/ : (stats.outgoing / double(sum));
+        }
 
+        explicit AnnotatedComponent(Component *c) : component(c), stats(c->GetDepStats()) {}
+    };
+
+    std::ostream& operator <<(std::ostream& os, const AnnotatedComponent & node)
+    {
+        os << node.component->NiceName('.') + " (I = "
+           << std::setprecision(2) << std::fixed << node.instability() << ")";
+        return os;
+    }
+
+    std::vector<AnnotatedComponent> ComputeMetrics(const std::unordered_map<std::string, Component *> &components)
+    {
+        std::vector<AnnotatedComponent> nodes;
+        nodes.reserve(components.size());
+        for (const auto &named_comp : components) {
+            nodes.emplace_back(named_comp.second);
+        }
+
+        std::sort(nodes.begin(), nodes.end(), [] (const AnnotatedComponent& lhs, const AnnotatedComponent& rhs)
+        {
+            return lhs.instability() > rhs.instability();
+        });
+
+        return nodes;
+    }
+
+    void PrintInstabilityMetric(const std::vector<AnnotatedComponent> & nodes)
+    {
+        std::cout << "Instability rank (the least stable components go first)\n"
+                  << "Rank\tScore [0..1]\tComponent\n";
+
+        std::cout << std::setprecision(2) << std::fixed;
+        for (size_t i = 0; i < nodes.size(); i++)
+        {
+            const auto& node = nodes[i];
+            std::cout << (i + 1) << ")\t" << node.instability() << "\t\t"
+                      << std::setw(20) << std::left << node.component->NiceName('.') << "\t"
+                      << "(in: " << node.stats.incoming << ", out: "  <<  node.stats.outgoing << ")\n";
+        }
+        std::cout << std::endl;
+    }
+
+    void PrintSuspiciousDependencies(const std::vector<AnnotatedComponent> & nodes)
+    {
+        std::cout << "Components which depend on the ones of lesser stability\n";
+
+        std::unordered_map<Component*, const AnnotatedComponent*> index;
+        for (const auto& node: nodes)
+        {
+            index.insert({node.component, &node});
+        }
+
+        const double eps = 0.0099;
+        for (const auto& node : nodes)
+        {
+            std::vector<const AnnotatedComponent*> volatiles;
+            const double my_instability = node.instability();
+            const auto add_volatiles = [&] (const std::unordered_set<Component *> & cs)
+            {
+                for (const auto c_ptr : cs)
+                {
+                    const auto & data_component = index[c_ptr];
+                    const double other_instability = data_component->instability();
+                    if (other_instability > my_instability + eps)
+                    {
+                        volatiles.push_back(data_component);
+                    }
+                }
+            };
+            add_volatiles(node.component->pubDeps);
+            add_volatiles(node.component->privDeps);
+
+            if (volatiles.empty())
+                continue;
+
+            std::cout << node << "\t-->\t";
+            bool first = true;
+            for (const auto & dep_node_ptr : volatiles)
+            {
+                if (! first)
+                    std::cout << ", ";
+                std::cout << *dep_node_ptr;
+                first = false;
+            }
+            std::cout << '\n';
+        }
+        std::cout << std::endl;
+    }
+}
+
+void PrintInstabilityStats(const std::unordered_map<std::string, Component *> &components) {
+    using namespace metrics;
+
+    const auto nodes = ComputeMetrics(components);
+
+    PrintInstabilityMetric(nodes);
+
+    PrintSuspiciousDependencies(nodes);
+}

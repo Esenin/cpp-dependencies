@@ -83,6 +83,16 @@ struct Component {
         for (auto f : files) { l += f->loc; }
         return l;
     }
+
+    struct DependenciesStats {
+        size_t incoming;
+        size_t outgoing;
+    };
+    DependenciesStats GetDepStats() const {
+        size_t incoming = pubLinks.size() + privLinks.size();
+        size_t outgoing = pubDeps.size() + privDeps.size();
+        return DependenciesStats{incoming, outgoing};
+    }
     bool recreate;
     bool hasAddonCmake;
     std::string type;

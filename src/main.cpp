@@ -102,6 +102,7 @@ private:
         commands["--regen"] = &Operations::Regen;
         commands["--shortest"] = &Operations::Shortest;
         commands["--stats"] = &Operations::Stats;
+        commands["--instability"] = &Operations::InstabilityStats;
         commands["--usedby"] = &Operations::UsedBy;
     }
     void RunCommand(std::vector<std::string>::iterator &arg, std::vector<std::string>::iterator &end) {
@@ -223,6 +224,10 @@ private:
             << totalPublicLinks << " public dependencies, "
             << totalPrivateLinks << " private dependencies\n";
         std::cout << "Detected " << NodesWithCycles(components) << " nodes in cycles\n";
+    }
+    void InstabilityStats(std::vector<std::string>) {
+        LoadProject();
+        PrintInstabilityStats(components);
     }
     void InOut(std::vector<std::string> args) {
         LoadProject();
@@ -437,6 +442,11 @@ private:
         std::cout << "                                            - files that are more than 2000 LoC\n";
         std::cout << "                                            - files that are not compiled and never included\n";
         std::cout << "    --includesize                    : Calculate the total number of lines added to each file through #include\n";
+        std::cout << "    --instability                    : Show instability rank of components and suspicious dependencies.\n";
+        std::cout << "                                       The rank is defined as a ratio: number of all outgoing\n";
+        std::cout << "                                       dependencies over a sum of incoming and outgoing dependencies\n";
+        std::cout << "                                       of a component. I = 1 indicates a maximally unstable component.\n";
+        std::cout << "                                       Ref: Robert C. Martin: Clean Architecture\n";
         std::cout << "\n";
         std::cout << "  Target information:\n";
         std::cout << "    --info                           : Show all information on a given specific target\n";

@@ -40,6 +40,7 @@ void PrintLinksForTarget(Component *c);
 void PrintInfoOnTarget(Component *c);
 void FindSpecificLink(const Configuration& config, std::unordered_map<std::string, File>& files, Component *from, Component *to);
 void UpdateIncludes(std::unordered_map<std::string, File>& files, std::unordered_map<std::string, std::string> &includeLookup, Component* component, const std::string& desiredPath, bool isAbsolute);
+void PrintInstabilityStats(const std::unordered_map<std::string, Component *> &components);
 
 #endif
 
